@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Microfinance Manager</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 p-6">
+  <h1 class="text-3xl font-bold mb-4">Microfinance Manager</h1>
+
+  <label class="block mb-1">Select Member:</label>
+  <select id="member" class="mb-4 p-2 border rounded w-full md:w-1/2">
+    <option value="" disabled selected>Select...</option>
+    <!-- JS will populate -->
+  </select>
+
+  <form id="tx-form" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+    <!-- month,savings,profit,withdraw,total,loan,instalment,instalment_no,instalment_due,receive_date,receiver,message,id -->
+    <input type="text" name="month" placeholder="Month (e.g. June 2025)" required pattern="^[A-Za-z]+\s+\d{4}$" class="p-2 border rounded"/>
+    <input type="number" name="savings" placeholder="Savings" required class="p-2 border rounded"/>
+    <input type="number" name="profit" step="0.01" placeholder="Profit" readonly class="p-2 border rounded"/>
+    <input type="number" name="withdraw" placeholder="Withdraw" class="p-2 border rounded"/>
+    <input type="number" name="total" placeholder="Total" readonly class="p-2 border bg-gray-200"/>
+    <input type="number" name="loan" placeholder="Loan" class="p-2 border rounded"/>
+    <input type="number" name="instalment" placeholder="Instalment" class="p-2 border rounded"/>
+    <input type="number" name="instalment_no" placeholder="Instalment No" readonly class="p-2 border bg-gray-200"/>
+    <input type="number" name="instalment_due" placeholder="Instalment Due" readonly class="p-2 border bg-gray-200"/>
+    <input type="date" name="receive_date" required class="p-2 border rounded"/>
+    <input type="text" name="receiver" placeholder="Receiver" class="p-2 border rounded"/>
+    <input type="text" name="message" placeholder="Message" class="p-2 border rounded"/>
+    <input type="hidden" name="id" />
+    <input type="hidden" name="action" value="create" />
+    <button type="submit" class="col-span-full bg-blue-600 text-white p-2 rounded">Submit</button>
+  </form>
+
+  <input type="text" id="search" placeholder="Search..." class="p-2 border rounded w-full mb-4"/>
+
+  <div class="overflow-auto">
+    <table class="table-auto w-full bg-white shadow">
+      <thead class="bg-gray-200">
+        <tr class="text-left">
+          <th class="p-2">Month</th><th>Savings</th><th>Profit</th><th>Withdraw</th>
+          <th>Total</th><th>Loan</th><th>Instalment</th><th>Inst No.</th><th>Due</th>
+          <th>Date</th><th>Receiver</th><th>Msg</th><th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="tx-table"></tbody>
+    </table>
+  </div>
+
+  <script>
+    const memberEl = document.getElementById('member');
+    const form = document.getElementById('tx-form');
+    const table = document.getElementById('tx-table');
+    const scriptURL = 'https://script.google.com/macros/s/AKfycbxLALYFMMv0BzkIxTcy5L0eghhyh76R8dzSFLEjs9rG0iBPTEKt0unLfRpF-7VoFJmv/exec';
+
+    const MEMBERS = [
+      'member1','member2','member3','member4','member5',
+      'member6','member7','member8','member9','member10'
+    ];
+    MEMBERS.forEach(m=>{
+      const o=new Option(m,m);
+      memberEl.append(o);
+    });
+
+    let currentMember='';
+    memberEl.addEventListener('change',()=>{
+      currentMember=memberEl.value;
+      load();
+    });
+
+    async function load(){
+      if(!currentMember) return;
+      const res = await fetch(`${scriptURL}?action=read&member=${currentMember}`);
+      const data = await res.json();
+      renderTable(data);
+    }
+
+    function renderTable(rows){
+      table.innerHTML='';
+      rows.sort((a,b)=>new Date(b.receive_date)-new Date(a.receive_date));
+      rows.forEach(r=>{
+        const tr=document.createElement('tr');
+        ['month','savings','profit','withdraw','total','loan','instalment','instalment_no','instalment_due','receive_date','receiver','message'].forEach(k=>{
+          const td=document.createElement('td');
+          if (k === 'receive_date') {
+            const utcDate = new Date(r[k]);
+            if (!isNaN(utcDate)) {
+              const bdTime = new Date(utcDate.getTime() + 6 * 60 * 60 * 1000); // Add 6 hours for GMT+6
+              td.textContent = bdTime.toISOString().split('T')[0];
+            } else {
+              td.textContent = r[k];
+            }
+          } else if (k === 'month') {
+            const d = new Date(r[k]);
+            td.textContent = isNaN(d) ? r[k] : d.toLocaleString('en-US', { month: 'long', year: 'numeric' });
+          } else if (['savings', 'profit', 'withdraw', 'total', 'loan', 'instalment', 'instalment_due'].includes(k)) {
+            const num = parseFloat(r[k]);
+            td.textContent = isNaN(num) ? '' : num.toFixed(2);
+          } else {
+            td.textContent = r[k];
+          }
+
+
+          td.className='p-2 border';
+          tr.append(td);
+        });
+        const ac=document.createElement('td');
+        ac.className='p-2 border';
+        const e = document.createElement('button');
+        e.textContent = 'Edit';
+        e.className = 'text-blue-600 mr-2';
+        e.onclick = () => {
+          populate(r);
+          form.scrollIntoView({ behavior: 'smooth' }); // Scrolls to form
+        };
+        const d=document.createElement('button');
+        d.textContent='Delete'; d.className='text-red-600';
+        d.onclick=()=>action('delete', {...r});
+        ac.append(e,d); tr.append(ac);
+        table.append(tr);
+      });
+    }
+
+    function populate(r) {
+  const fields = [
+    'month', 'savings', 'profit', 'withdraw', 'total', 'loan',
+    'instalment', 'instalment_no', 'instalment_due',
+    'receive_date', 'receiver', 'message', 'id'
+  ];
+
+  fields.forEach(k => {
+    let val = r[k] || '';
+    if (['savings', 'profit', 'withdraw', 'loan', 'instalment', 'instalment_no', 'instalment_due', 'total'].includes(k)) {
+      val = parseFloat(val).toFixed(2);
+    }
+    if (k === 'receive_date') {
+  const d = new Date(val);
+  if (!isNaN(d)) {
+    const offsetMs = 6 * 60 * 60 * 1000; // GMT+6
+    const localDate = new Date(d.getTime() + offsetMs);
+    val = localDate.toISOString().split('T')[0];
+  }
+} else if (k === 'month') {
+  const d = new Date(val);
+  if (!isNaN(d)) {
+    val = d.toLocaleString('en-US', { month: 'long', year: 'numeric' }); // e.g., June 2025
+  }
+}
+
+    form.elements[k].value = val;
+  });
+
+  form.elements['action'].value = 'update';
+}
+
+
+
+
+    ['savings', 'profit', 'withdraw'].forEach(name => {
+      form.elements[name].addEventListener('input', recalc);
+    });
+    function recalc(){
+      const s=+form.elements['savings'].value||0;
+      const p=+form.elements['profit'].value||0;
+      const w=+form.elements['withdraw'].value||0;
+      const l=+form.elements['loan'].value||0;
+      const inst=+form.elements['instalment'].value||0;
+      form.elements['total'].value = (s+p-w + getPrevTotal()).toFixed(2);
+      // instalment_no & due roughly same logic; can refine similarly
+    }
+
+    function getPrevTotal(){
+      const rows = Array.from(table.querySelectorAll('tr'));
+      if(!rows.length) return 0;
+      const td = rows[rows.length -1].children[4];
+      return td ? +td.textContent : 0;
+    }
+
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!currentMember) return alert('Select a member');
+
+      const fd = new FormData(form);
+      fd.set('member', currentMember);
+
+      const res = await fetch(scriptURL, { method: 'POST', body: fd });
+      const json = await res.json();
+
+      if (json.success) {
+        alert('Saved');
+        form.reset();
+        form.elements['action'].value = 'create'; // <-- Reset action to 'create'
+        load();
+      } else {
+        alert('Error: ' + json.message);
+      }
+    });
+
+    async function action(act, r){
+      if(!currentMember) return;
+      if(confirm('Confirm?')){
+        const fd = new FormData();
+        fd.set('action',act);
+        fd.set('member', currentMember);
+        fd.set('id', r.id);
+        const res = await fetch(scriptURL, { method:'POST', body:fd });
+        const j = await res.json();
+        if(j.success){ alert('Done'); load();}
+        else alert('Err:'+j.message);
+      }
+    }
+
+    document.getElementById('search').addEventListener('input', e=>{
+      const q=e.target.value.toLowerCase();
+      table.querySelectorAll('tr').forEach(tr=>{
+        tr.style.display = tr.innerText.toLowerCase().includes(q)?'':'none';
+      });
+    });
+  </script>
+</body>
+</html>
