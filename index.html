@@ -9,11 +9,20 @@
 <body class="bg-gray-50 p-6">
   <h1 class="text-3xl font-bold mb-4">Microfinance Manager</h1>
 
-  <label class="block mb-1">Select Member:</label>
-  <select id="member" class="mb-4 p-2 border rounded w-full md:w-1/2">
-    <option value="" disabled selected>Select...</option>
-    <!-- JS will populate -->
-  </select>
+  <div class="flex flex-col md:flex-row md:items-center md:space-x-4 mb-4">
+    <div class="flex-1">
+      <label class="block mb-1">Select Member:</label>
+      <select id="member" class="p-2 border rounded w-full">
+        <option value="" disabled selected>Select...</option>
+        <!-- JS will populate -->
+      </select>
+    </div>
+    <div class="flex items-end mt-2 md:mt-0">
+      <span class="text-gray-700 font-semibold mr-2">Total Cash:</span>
+      <span id="all-total" class="text-lg text-blue-700 font-bold">৳ 0.00</span>
+    </div>
+  </div>
+
 
   <form id="tx-form" class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
     <!-- month,savings,profit,withdraw,total,loan,instalment,instalment_no,instalment_due,receive_date,receiver,message,id -->
@@ -72,9 +81,23 @@
 
     async function load(){
       if(!currentMember) return;
+
+      // 1. Fetch current member's data
       const res = await fetch(`${scriptURL}?action=read&member=${currentMember}`);
       const data = await res.json();
       renderTable(data);
+
+      // 2. Fetch data of ALL members to calculate total
+      let allTotals = 0;
+      for (let m of MEMBERS) {
+        const r = await fetch(`${scriptURL}?action=read&member=${m}`);
+        const d = await r.json();
+        for (let row of d) {
+          const t = parseFloat(row.total);
+          if (!isNaN(t)) allTotals += t;
+        }
+      }
+      document.getElementById('all-total').textContent = `৳ ${allTotals.toFixed(2)}`;
     }
 
     function renderTable(rows){
